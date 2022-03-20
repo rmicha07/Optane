@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <libpmemobj.h>
 
-#include "layout.h"
 
 #define LAYOUT_NAME "pmcache"
 
