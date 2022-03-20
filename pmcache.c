@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-
 #include <libpmemobj.h>
+
+#include "layout.h"
 
 #define LAYOUT_NAME "pmcache"
 
@@ -67,6 +68,7 @@ CheckFileExists(char const *file)
 {
 	return access(file, F_OK);
 }
+
 
 /*
  * Returns a hash for input string str.
@@ -145,8 +147,13 @@ int main(int argc, char* argv[])
 	}
 
   // TODO 
-  // PMEMoid root = ...
+  // PMEMoid root =
 	// struct PmCacheRoot *rootp = ...
+
+PMEMoid root = pmemobj_root(pop, sizeof (struct my_root));
+struct PmCacheRoot *rootp = pmemobj_direct(root);
+
+
 
   struct Operation op;
   while (ParseNext(stdin, MAX_KEY_SIZE-1, MAX_VALUE_SIZE-1, &op) == 0) {
