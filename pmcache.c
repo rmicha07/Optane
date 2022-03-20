@@ -149,7 +149,7 @@ int main(int argc, char* argv[])
   // PMEMoid root =
 	// struct PmCacheRoot *rootp = ...
 
-PMEMoid root = pmemobj_root(pop, sizeof (struct my_root));
+PMEMoid root = pmemobj_root(pop, sizeof (struct PmCacheRoot));
 struct PmCacheRoot *rootp = pmemobj_direct(root);
 
 
