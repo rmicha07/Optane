@@ -88,7 +88,8 @@ unsigned long hash(char *str)
  */
 unsigned long SlotNumber(char* key)
 {
-  // TODO 
+  return hash(key)%CACHE_SIZE;
+
 }
 
 /*
@@ -100,6 +101,19 @@ unsigned long SlotNumber(char* key)
 static int Put(PMEMobjpool *pop, struct PmCacheRoot* root, char* key, char* value) {
   struct KeyValueSlot* slot = &root->slots[SlotNumber(key)];
   // TODO 
+
+  /*
+  int index=SlotNumber(key);
+  printf("Index: %d \n",index);
+  printf("Key:%s Value:%s \n",key,value);
+  printf("Hash: %ld \n",hash(key));
+  */
+
+  slot->valid='1';
+  pmem_memcpy_persist(slot->key,key,MAX_KEY_SIZE);
+  pmem_memcpy_persist(slot->value,value,MAX_VALUE_SIZE);
+  
+  return 0;
 }
 
 /*
@@ -110,6 +124,13 @@ static int Put(PMEMobjpool *pop, struct PmCacheRoot* root, char* key, char* valu
 static int Get(PMEMobjpool *pop, struct PmCacheRoot* root, char* key, char* value) {
   struct KeyValueSlot* slot = &root->slots[SlotNumber(key)];
   // TODO 
+  //if (memcmp(slot->valid,'1',1)==0){
+    //if (memcmp(slot->key,key,MAX_KEY_SIZE)==0){
+        pmem_memcpy_persist(value,slot->value,MAX_VALUE_SIZE);
+        return 0;
+      //} 
+   // }
+  //return 1;
 }
 
 /*
@@ -120,6 +141,13 @@ static int Get(PMEMobjpool *pop, struct PmCacheRoot* root, char* key, char* valu
 static int Del(PMEMobjpool *pop, struct PmCacheRoot* root, char* key) {
   struct KeyValueSlot* slot = &root->slots[SlotNumber(key)];
   // TODO 
+  //if (memcmp(slot->valid,"1",strlen(slot->valid))==0){
+    //if (memcmp(slot->key,key,MAX_KEY_SIZE)==0){
+        memset(slot->value," ",MAX_VALUE_SIZE);
+      return 0;
+    //}
+ // }
+  return 1;
 }
 
 /*
@@ -127,6 +155,7 @@ static int Del(PMEMobjpool *pop, struct PmCacheRoot* root, char* key) {
  * against the persistent cache.
  */
 int main(int argc, char* argv[])
+
 {
   if (argc != 2) {
     fprintf(stderr, "usage: %s pool-file-name\n", argv[0]);
@@ -135,14 +164,19 @@ int main(int argc, char* argv[])
     return 1;
   }
 
+
   const char *path = argv[1];
 
 	static PMEMobjpool *pop = NULL;
 
+  pop=pmemobj_create(argv[1], LAYOUT_NAME, PMEMOBJ_MIN_POOL, 0666);
+
 	if (CheckFileExists(path) != 0) {
-    // TODO 
+    //TODO
+    printf("File path ok");
 	} else {
-    // TODO 
+    //TODO
+    printf("File not found");
 	}
 
   // TODO 
@@ -152,9 +186,10 @@ int main(int argc, char* argv[])
 PMEMoid root = pmemobj_root(pop, sizeof (struct PmCacheRoot));
 struct PmCacheRoot *rootp = pmemobj_direct(root);
 
+struct Operation op;
 
+//printf("Operation Size:%d \n KeyValueSlot: %d",sizeof(op),sizeof(slot));
 
-  struct Operation op;
   while (ParseNext(stdin, MAX_KEY_SIZE-1, MAX_VALUE_SIZE-1, &op) == 0) {
     switch (op.type) {
       case 'P': {
@@ -187,5 +222,6 @@ struct PmCacheRoot *rootp = pmemobj_direct(root);
         exit(1);
     }
   }
+
   return 0;
 }
