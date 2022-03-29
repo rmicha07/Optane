@@ -3,16 +3,15 @@
 #include <unistd.h>
 #include <libpmemobj.h>
 
-
 #define LAYOUT_NAME "pmcache"
 
 #define MAX_KEY_SIZE 8
 #define MAX_VALUE_SIZE 128
-#define CACHE_SIZE 1024 
+#define CACHE_SIZE 1024
 
 /*
  * Describes a persistent cache operation.
- * 
+ *
  * type can be any of 'P', 'G', 'D' for operations put, get, delete, respectively.
  */
 struct Operation {
@@ -38,20 +37,20 @@ struct PmCacheRoot {
 };
 
 /*
- * Parses next operation from file stream fin and stores operation metadata 
+ * Parses next operation from file stream fin and stores operation metadata
  * into operation op.
  */
 static int ParseNext(FILE* fin, int max_key_size, int max_value_size, struct Operation* op)
 {
-  char buf[128]; 
+  char buf[128];
   if (fscanf(fin, "%1s", buf) == EOF) {
     return 1;
   }
   op->type = buf[0];
-   
+
   sprintf(buf, "%%%ds", max_key_size);
   fscanf(fin, buf, op->key);
-  
+
   if (op->type == 'P') {
     sprintf(buf, "%%%ds", max_value_size);
     fscanf(fin, buf, op->value);
@@ -65,7 +64,7 @@ static int ParseNext(FILE* fin, int max_key_size, int max_value_size, struct Ope
 static inline int
 CheckFileExists(char const *file)
 {
-	return access(file, F_OK);
+        return access(file, F_OK);
 }
 
 
@@ -88,31 +87,36 @@ unsigned long hash(char *str)
  */
 unsigned long SlotNumber(char* key)
 {
-  return hash(key)%CACHE_SIZE;
+  // TODO
+ return hash(key)%CACHE_SIZE;
 
 }
 
 /*
- * Associates the specified value with the specified key in the persistent cache. 
+ * Associates the specified value with the specified key in the persistent cache.
  *
  * If the key already exists, then it overwrites its value with the new value.
  * Returns zero on success.
  */
-static int Put(PMEMobjpool *pop, struct PmCacheRoot* root, char* key, char* value) {
+static int Put(PMEMobjpool *pop, struct PmCacheRoot* root, char* key, char* value){
   struct KeyValueSlot* slot = &root->slots[SlotNumber(key)];
-  // TODO 
-
-  /*
-  int index=SlotNumber(key);
-  printf("Index: %d \n",index);
-  printf("Key:%s Value:%s \n",key,value);
-  printf("Hash: %ld \n",hash(key));
-  */
-
+  // TODO
+  // printf("In put\n");
   slot->valid='1';
-  pmem_memcpy_persist(slot->key,key,MAX_KEY_SIZE);
-  pmem_memcpy_persist(slot->value,value,MAX_VALUE_SIZE);
-  
+  pmemobj_persist(pop,&slot->valid,1);
+  //printf("Valid ok");
+  pmemobj_memcpy_persist(pop,slot->key,key,MAX_KEY_SIZE);
+  //printf("Valid key ");
+  pmemobj_memcpy_persist(pop,slot->value,value,MAX_VALUE_SIZE);
+  printf("Wrote %c %s %s in memory \n",slot->valid,slot->key,slot->value);
+
+  /*  memcpy(slot->valid,"1",1);
+  memcpy(slot->key,key,MAX_KEY_SIZE);
+  memcpy(slot->value,value,MAX_VALUE_SIZE);
+  pmemobj_persist(pop,root,sizeof(root));
+*/
+
+  printf("Put done");
   return 0;
 }
 
@@ -123,14 +127,18 @@ static int Put(PMEMobjpool *pop, struct PmCacheRoot* root, char* key, char* valu
  */
 static int Get(PMEMobjpool *pop, struct PmCacheRoot* root, char* key, char* value) {
   struct KeyValueSlot* slot = &root->slots[SlotNumber(key)];
-  // TODO 
-  //if (memcmp(slot->valid,'1',1)==0){
-    //if (memcmp(slot->key,key,MAX_KEY_SIZE)==0){
-        pmem_memcpy_persist(value,slot->value,MAX_VALUE_SIZE);
-        return 0;
-      //} 
-   // }
-  //return 1;
+  //printf("b4 cmp\n");
+  // TODO
+  if (slot->valid=='1'){
+    printf("EXISTS!\n");
+    memcpy(value,slot->value,MAX_VALUE_SIZE);
+    printf("Get ok\n");
+  return 0;
+      //}
+    }
+
+printf("DOES NOT EXIST\n");
+return 1;
 }
 
 /*
@@ -140,23 +148,30 @@ static int Get(PMEMobjpool *pop, struct PmCacheRoot* root, char* key, char* valu
  */
 static int Del(PMEMobjpool *pop, struct PmCacheRoot* root, char* key) {
   struct KeyValueSlot* slot = &root->slots[SlotNumber(key)];
-  // TODO 
-  //if (memcmp(slot->valid,"1",strlen(slot->valid))==0){
-    //if (memcmp(slot->key,key,MAX_KEY_SIZE)==0){
-        memset(slot->value," ",MAX_VALUE_SIZE);
-      return 0;
-    //}
- // }
+  // TODO
+  slot->valid='0';
+  //printf("Valid 0 done");
+  pmemobj_persist(pop,root,sizeof(root));
+  return 0;
+
   return 1;
-}
+ }
+
 
 /*
- * Reads standard input line by line and executes corresponding operation 
+ * Reads standard input line by line and executes corresponding operation
  * against the persistent cache.
  */
 int main(int argc, char* argv[])
-
 {
+
+struct Operation op;
+
+struct KeyValueSlot* slot;
+
+//printf("Operation Size:%d \n KeyValueSlot: %d\n\n",sizeof(op),sizeof(slot));
+
+
   if (argc != 2) {
     fprintf(stderr, "usage: %s pool-file-name\n", argv[0]);
     fprintf(stderr, "\n");
@@ -164,31 +179,33 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-
   const char *path = argv[1];
 
-	static PMEMobjpool *pop = NULL;
+        static PMEMobjpool *pop = NULL;
 
-  pop=pmemobj_create(argv[1], LAYOUT_NAME, PMEMOBJ_MIN_POOL, 0666);
+  //pop=pmemobj_create(argv[1], LAYOUT_NAME, PMEMOBJ_MIN_POOL, 0666);
 
-	if (CheckFileExists(path) != 0) {
-    //TODO
-    printf("File path ok");
-	} else {
-    //TODO
-    printf("File not found");
-	}
+        if (CheckFileExists(path) != 0) {
+            pop=pmemobj_create(argv[1], LAYOUT_NAME, PMEMOBJ_MIN_POOL, 0666);
 
-  // TODO 
+        printf("created memory\n");
+        } else {
+    // TODO
+        pop=pmemobj_open(argv[1],LAYOUT_NAME);
+
+   printf("Memory exists\n");
+
+        }
+  //printf("BRpoint 1\n");
+
+  // TODO
   // PMEMoid root =
-	// struct PmCacheRoot *rootp = ...
+        // struct PmCacheRoot *rootp = ...
 
 PMEMoid root = pmemobj_root(pop, sizeof (struct PmCacheRoot));
 struct PmCacheRoot *rootp = pmemobj_direct(root);
 
-struct Operation op;
-
-//printf("Operation Size:%d \n KeyValueSlot: %d",sizeof(op),sizeof(slot));
+ // printf("BRpoint 2\n");
 
   while (ParseNext(stdin, MAX_KEY_SIZE-1, MAX_VALUE_SIZE-1, &op) == 0) {
     switch (op.type) {
@@ -222,6 +239,6 @@ struct Operation op;
         exit(1);
     }
   }
-
+  abort();
   return 0;
 }
